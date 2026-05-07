@@ -64,6 +64,7 @@ static const uint kObjectInstanceFlagRemapTransparencyAlpha = (1 << 11); // All 
 static const uint kObjectInstanceFlagAlphaTestThresholdHalf = (1 << 12);
 static const uint kObjectInstanceFlagTextureAlphaControlsVertexColor = (1 << 13);
 static const uint kObjectInstanceFlagGlint                  = (1 << 14);
+static const uint kObjectInstanceFlagUsesUvBiasPacking      = (1 << 15);
 
 // Constants borrowed from deferred rendering
 static const uint kInvalidPBRTextureHandle = 0xffff; // Compare against pbrTextureDataIndex vertex attribute

@@ -109,11 +109,23 @@ float4 unpackObjectInstanceTintColor(uint packedColor) {
     ) / 255.0;
 }
 
-float2 unpackVertexUV(uint packedUV) {
-    float2 uv = float2(packedUV & 0xffff, packedUV >> 16) * (1. / 0xffff);
-    // Quantize UVs according to max possible atlas size (32k on NVidia), fixes visible texture seams on certain objects.
-    uv = round(uv*32768)/32768.0;
-    return uv;
+float2 unpackVertexUV(uint packedUV, bool packedUvIncludesBias = false) {
+    const float uvScale = 1.0 / 65535.0; // 1.0/0xffff
+    const float biasScale = 1.0 / 32768.0;
+
+    if (packedUvIncludesBias) {
+        float2 uv = float2(packedUV << 1u & 0xfffeu, packedUV >> 15u & 0xfffeu) * uvScale;
+        float2 bias = (float2(packedUV >> 15u & 1u, packedUV >> 31u) * 2.0 - 1.0) * biasScale;
+
+        return uv + bias;
+    } else {
+        float2 uv = float2(packedUV & 0xffff, packedUV >> 16) * uvScale;
+
+        // Quantize UVs according to largest possible texture size (32k on NVidia), fixes visible texture seams on certain objects.
+        uv = round(uv * 32768) * (1.0 / 32768.0);
+
+        return uv;
+    }
 }
 
 // Determine whether g_view.directionToSun is actually direction to moon.
