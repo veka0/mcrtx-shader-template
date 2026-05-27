@@ -473,7 +473,7 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
         surfaceInfo.roughness = mers.b;
         surfaceInfo.subsurface = mers.a;
 
-        if (pbr.flags & (kPBRTextureDataFlagHasNormalTexture | kPBRTextureDataFlagHasHeightMapTexture))
+        if (pbr.flags & (kPBRTextureDataFlagHasNormalTexture | kPBRTextureDataFlagHasHeightMapTexture | kPBRTextureDataFlagHasPackedHeightNormalsTexture))
         {
             float2 normalUV = uv * pbr.colourToNormalUvScale + pbr.colourToNormalUvBias;
 
@@ -487,9 +487,9 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
                 texel = 2 * texel - 1;
                 texNormal = float3(texel, sqrt(max(0, 1 - texel.x * texel.x - texel.y * texel.y)));
             }
-            else
+            else if (pbr.flags & kPBRTextureDataFlagHasPackedHeightNormalsTexture)
             {
-                // This code is based on the Vibrant Visuals implementation of heightmaps for blocks.
+                // This code is based on the Vibrant Visuals implementation of heightmaps, with packed egde normals.
 
                 // g_view.heightMapPixelEdgeWidth = 1/12
                 // g_view.recipHeightMapDepth = 1/4
@@ -502,6 +502,42 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
                 pixelEgdeNormals = 2.0 * pixelEgdeNormals - 1.0;
                 texNormal.xy = pixelEgdeNormals.yz * step(1.0 - g_view.heightMapPixelEdgeWidth, nudgeSampleCoord) - pixelEgdeNormals.wx * step(nudgeSampleCoord, g_view.heightMapPixelEdgeWidth);
                 texNormal.xy *= step(kHeightMapFlattenEpsilon, abs(texNormal.xy));
+                texNormal.z = g_view.recipHeightMapDepth;
+                texNormal = normalize(texNormal);
+            }
+            else
+            {
+                // This code is based on the Vibrant Visuals implementation of traditional grayscale heightmaps.
+                
+                float2 widthHeight;
+                colorTex.GetDimensions(widthHeight.x, widthHeight.y);
+                float2 pixelCoord = normalUV * widthHeight;
+                {
+                    const float kNudgePixelCentreDistEpsilon = 0.0625;
+                    const float kNudgeUvEpsilon = 0.25 / 65536.;
+                    float2 nudgeSampleCoord = frac(pixelCoord);
+                    if (abs(nudgeSampleCoord.x - 0.5) < kNudgePixelCentreDistEpsilon)
+                    {
+                        normalUV.x += (nudgeSampleCoord.x > 0.5f) ? kNudgeUvEpsilon : -kNudgeUvEpsilon;
+                    }
+                    if (abs(nudgeSampleCoord.y - 0.5) < kNudgePixelCentreDistEpsilon)
+                    {
+                        normalUV.y += (nudgeSampleCoord.y > 0.5f) ? kNudgeUvEpsilon : -kNudgeUvEpsilon;
+                    }
+                }
+                float4 heightSamples = colorTex.Gather(pointSampler, normalUV, 0);
+                float2 subPixelCoord = frac(pixelCoord + 0.5);
+                const float kBevelMode = 0.0;
+                float2 axisSamplePair = (subPixelCoord.y > 0.5) ? heightSamples.xy : heightSamples.wz;
+                float axisBevelCentreSampleCoord = subPixelCoord.x;
+                axisBevelCentreSampleCoord += ((axisSamplePair.x > axisSamplePair.y) ? g_view.heightMapPixelEdgeWidth : -g_view.heightMapPixelEdgeWidth) * kBevelMode;
+                int2 axisSampleIndices = int2(clamp(float2(axisBevelCentreSampleCoord - g_view.heightMapPixelEdgeWidth, axisBevelCentreSampleCoord + g_view.heightMapPixelEdgeWidth) * 2.f, 0.0, 1.0));
+                texNormal.x = (axisSamplePair[axisSampleIndices.x] - axisSamplePair[axisSampleIndices.y]);
+                axisSamplePair = (subPixelCoord.x > 0.5f) ? heightSamples.zy : heightSamples.wx;
+                axisBevelCentreSampleCoord = subPixelCoord.y;
+                axisBevelCentreSampleCoord += ((axisSamplePair.x > axisSamplePair.y) ? g_view.heightMapPixelEdgeWidth : -g_view.heightMapPixelEdgeWidth) * kBevelMode;
+                axisSampleIndices = int2(clamp(float2(axisBevelCentreSampleCoord - g_view.heightMapPixelEdgeWidth, axisBevelCentreSampleCoord + g_view.heightMapPixelEdgeWidth) * 2.f, 0.0, 1.0));
+                texNormal.y = (axisSamplePair[axisSampleIndices.x] - axisSamplePair[axisSampleIndices.y]);
                 texNormal.z = g_view.recipHeightMapDepth;
                 texNormal = normalize(texNormal);
             }

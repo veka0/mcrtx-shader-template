@@ -69,10 +69,11 @@ static const uint kObjectInstanceFlagUsesUvBiasPacking      = (1 << 15);
 // Constants borrowed from deferred rendering
 static const uint kInvalidPBRTextureHandle = 0xffff; // Compare against pbrTextureDataIndex vertex attribute
 // PBRTextureData.flags
-static const uint kPBRTextureDataFlagHasMaterialTexture   = (1 << 0);
-static const uint kPBRTextureDataFlagHasSubsurfaceChannel = (1 << 1);
-static const uint kPBRTextureDataFlagHasNormalTexture     = (1 << 2);
-static const uint kPBRTextureDataFlagHasHeightMapTexture  = (1 << 3);
+static const uint kPBRTextureDataFlagHasMaterialTexture             = (1 << 0);
+static const uint kPBRTextureDataFlagHasSubsurfaceChannel           = (1 << 1);
+static const uint kPBRTextureDataFlagHasNormalTexture               = (1 << 2);
+static const uint kPBRTextureDataFlagHasHeightMapTexture            = (1 << 3);
+static const uint kPBRTextureDataFlagHasPackedHeightNormalsTexture  = (1 << 4);
 
 // inputTemporallyStableLights[].flags
 // Both of these only appear on existing lights, not on newly placed or destroyed lights.
