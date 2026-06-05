@@ -130,6 +130,7 @@ float2 unpackVertexUV(uint packedUV, bool packedUvIncludesBias = false) {
 
 // Determine whether g_view.directionToSun is actually direction to moon.
 bool isMoonPrimaryLight() {
+    if (abs(g_view.directionToSun.y) > 0.999) return g_view.skyTextureW > 0.9;
     float angle1 = g_view.sunAzimuth - PI;
     float angle2 = atan2(g_view.directionToSun.z, g_view.directionToSun.x);
     float angleDiff = abs(angle1-angle2);
