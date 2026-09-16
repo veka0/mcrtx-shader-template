@@ -130,9 +130,6 @@ struct PBRTextureData {
     float maxMipMer; // 56
     float maxMipNormal; // 60
 };
-struct RandomSamples {
-    float4 hemisphereSamples[288]; // 0
-};
 struct VertexIrradianceCache {
     half4 incomingFrontAndHistoryLength; // 0
     half4 incomingBackAndPad; // 8
