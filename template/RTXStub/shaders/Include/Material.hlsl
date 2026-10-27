@@ -67,20 +67,20 @@ struct GeometryInfo
     float3 barycentric;
 
     // TBN
-    float3 tangent;
-    float3 bitangent;
-    float3 geometryNormal;
+    float3 modelSpaceGeometryTangent;
+    float3 modelSpaceGeometryBitangent;
+    float3 modelSpaceGeometryNormal;
 
     // Vertex attributes
-    float3 position;
-    float3 vertexNormal; // May be invalid for certain objects, check if normalByteOffset is not 0
+    float3 modelSpacePosition;
+    float3 modelSpaceVertexNormal; // May be invalid for certain objects, check if normalByteOffset is not 0
     float4 color;
     float2 uv0;
     // float2 uv1;
     // float2 uv2;
     // float2 uv3;
     uint pbrTextureDataIndex; // Optional, equals to kInvalidPBRTextureHandle if inapplicable.
-    float3 previousPosition; // Optional, equals to 0 by default. Check for kObjectInstanceFlagHasMotionVectors flag to see if it's applicable.
+    float3 modelSpacePreviousPosition; // Optional, equals to 0 by default. Check for kObjectInstanceFlagHasMotionVectors flag to see if it's applicable.
 };
 
 GeometryInfo GetGeometryInfo(HitInfo hitInfo, ObjectInstance objectInstance) {
@@ -107,9 +107,9 @@ GeometryInfo GetGeometryInfo(HitInfo hitInfo, ObjectInstance objectInstance) {
     float3 positions[3];
     geometryInfo.uv0 = 0..xx;
     geometryInfo.color = 0..xxxx;
-    geometryInfo.position = 0..xxx;
-    geometryInfo.previousPosition = 0..xxx;
-    geometryInfo.vertexNormal = 0..xxx;
+    geometryInfo.modelSpacePosition = 0..xxx;
+    geometryInfo.modelSpacePreviousPosition = 0..xxx;
+    geometryInfo.modelSpaceVertexNormal = 0..xxx;
 
     [unroll]
     for (uint i = 0; i < 3; ++i)
@@ -118,17 +118,17 @@ GeometryInfo GetGeometryInfo(HitInfo hitInfo, ObjectInstance objectInstance) {
         uint address = (vertices[i] + objectInstance.vertexOffsetInBaseVertices) * objectInstance.vertexStride;
    
         positions[i] = vertexBuffer.Load<float16_t4>(address + positionByteOffset).xyz;
-        geometryInfo.position += geometryInfo.barycentric[i] * positions[i];
+        geometryInfo.modelSpacePosition += geometryInfo.barycentric[i] * positions[i];
 
         // TODO: sometimes the game may not supply motion vector offset, in that case do we also check for `previousPositionOffset != 0`
         // or should this be left as is, since in that case it will use offset of 0 which is a curent frame position?
         if (objectInstance.flags & kObjectInstanceFlagHasMotionVectors)
         {
-            geometryInfo.previousPosition += geometryInfo.barycentric[i] * vertexBuffer.Load<float16_t4>(address + previousPositionOffset).xyz;
+            geometryInfo.modelSpacePreviousPosition += geometryInfo.barycentric[i] * vertexBuffer.Load<float16_t4>(address + previousPositionOffset).xyz;
         }
 
         geometryInfo.color += geometryInfo.barycentric[i] * unpackVertexColor(vertexBuffer.Load(address + colorByteOffset));
-        geometryInfo.vertexNormal += geometryInfo.barycentric[i] * unpackNormal(vertexBuffer.Load(address + normalByteOffset)).xyz;
+        geometryInfo.modelSpaceVertexNormal += geometryInfo.barycentric[i] * unpackNormal(vertexBuffer.Load(address + normalByteOffset)).xyz;
         uvs[i] = unpackVertexUV(vertexBuffer.Load(address + uv0ByteOffset), objectInstance.flags & kObjectInstanceFlagUsesUvBiasPacking);
         geometryInfo.uv0 += geometryInfo.barycentric[i] * uvs[i];
     }
@@ -136,7 +136,7 @@ GeometryInfo GetGeometryInfo(HitInfo hitInfo, ObjectInstance objectInstance) {
     // Catch cases where vertex color is not provided (block breaking overlay).
     if (!colorByteOffset) geometryInfo.color = 1;
 
-    geometryInfo.geometryNormal = normalize(cross((positions[1] - positions[0]), (positions[2] - positions[0])));
+    geometryInfo.modelSpaceGeometryNormal = normalize(cross((positions[1] - positions[0]), (positions[2] - positions[0])));
     // vertexNormal = normalize(vertexNormal); // Vertex normal is not normalized as GeometryInfo is meant to pass raw attribute values.
 
     // To compute tangent and bitangent (aligned to UV), we have to solve for T and B from:
@@ -158,10 +158,10 @@ GeometryInfo GetGeometryInfo(HitInfo hitInfo, ObjectInstance objectInstance) {
         // If UV change is not sufficient enough to find T and B, use arbitrary vectors instead.
         // Fixes NANs in end portal.
 
-        float3 helperVec = abs(dot(float3(0, 1, 0), geometryInfo.geometryNormal)) > 0.99 ? float3(1, 0, 0) : float3(0, 1, 0);
+        float3 helperVec = abs(dot(float3(0, 1, 0), geometryInfo.modelSpaceGeometryNormal)) > 0.99 ? float3(1, 0, 0) : float3(0, 1, 0);
 
-        geometryInfo.tangent = cross(geometryInfo.geometryNormal, helperVec);
-        geometryInfo.bitangent = cross(geometryInfo.geometryNormal, geometryInfo.tangent);
+        geometryInfo.modelSpaceGeometryTangent = cross(geometryInfo.modelSpaceGeometryNormal, helperVec);
+        geometryInfo.modelSpaceGeometryBitangent = cross(geometryInfo.modelSpaceGeometryNormal, geometryInfo.modelSpaceGeometryTangent);
     }
     else
     {
@@ -175,12 +175,12 @@ GeometryInfo GetGeometryInfo(HitInfo hitInfo, ObjectInstance objectInstance) {
         float3 dPos1 = positions[1] - positions[0];
         float3 dPos2 = positions[2] - positions[0];
 
-        geometryInfo.tangent = dUV2.y * dPos1 - dUV1.y * dPos2;
-        geometryInfo.bitangent = dUV1.x * dPos2 - dUV2.x * dPos1;
+        geometryInfo.modelSpaceGeometryTangent = dUV2.y * dPos1 - dUV1.y * dPos2;
+        geometryInfo.modelSpaceGeometryBitangent = dUV1.x * dPos2 - dUV2.x * dPos1;
     }
     // Tip: tangent and bitangent can be pre-calculated from CalculateFaceData pass and stored in faceDataBuffers.
-    geometryInfo.tangent = normalize(geometryInfo.tangent);
-    geometryInfo.bitangent = normalize(geometryInfo.bitangent);
+    geometryInfo.modelSpaceGeometryTangent = normalize(geometryInfo.modelSpaceGeometryTangent);
+    geometryInfo.modelSpaceGeometryBitangent = normalize(geometryInfo.modelSpaceGeometryBitangent);
 
     geometryInfo.pbrTextureDataIndex = PBRTextureIdByteOffset ? 
         vertexBuffer.Load<uint>((vertices[0] + objectInstance.vertexOffsetInBaseVertices) * objectInstance.vertexStride + PBRTextureIdByteOffset) // TODO: is `& 0xffff` needed?
@@ -349,11 +349,11 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
     surfaceInfo.Init();
 
     uint normalByteOffset = objectInstance.offsetPack1 >> 8;
-    float3 modelSpaceNormal = normalByteOffset ? geometryInfo.vertexNormal : geometryInfo.geometryNormal;
+    float3 modelSpaceNormal = normalByteOffset ? geometryInfo.modelSpaceVertexNormal : geometryInfo.modelSpaceGeometryNormal;
     surfaceInfo.normal = normalize(mul(modelSpaceNormal, (float3x3)objectInstance.modelToWorld));
 
-    surfaceInfo.position = mul(float4(geometryInfo.position, 1), objectInstance.modelToWorld);
-    surfaceInfo.prevPosition = mul(float4((objectInstance.flags & kObjectInstanceFlagHasMotionVectors) ? geometryInfo.previousPosition : geometryInfo.position, 1), objectInstance.prevModelToWorld);
+    surfaceInfo.position = mul(float4(geometryInfo.modelSpacePosition, 1), objectInstance.modelToWorld);
+    surfaceInfo.prevPosition = mul(float4((objectInstance.flags & kObjectInstanceFlagHasMotionVectors) ? geometryInfo.modelSpacePreviousPosition : geometryInfo.modelSpacePosition, 1), objectInstance.prevModelToWorld);
 
     float4 color = 1..xxxx;
     float4 vertColor = geometryInfo.color;
@@ -477,9 +477,6 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
         {
             float2 normalUV = uv * pbr.colourToNormalUvScale + pbr.colourToNormalUvBias;
 
-            float3 tangent = normalize(mul(geometryInfo.tangent, (float3x3)objectInstance.modelToWorld));
-            float3 bitangent = normalize(mul(geometryInfo.bitangent, (float3x3)objectInstance.modelToWorld));
-
             float3 texNormal = float3(0, 0, 1);
             if (pbr.flags & kPBRTextureDataFlagHasNormalTexture)
             {
@@ -503,7 +500,6 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
                 texNormal.xy = pixelEgdeNormals.yz * step(1.0 - g_view.heightMapPixelEdgeWidth, nudgeSampleCoord) - pixelEgdeNormals.wx * step(nudgeSampleCoord, g_view.heightMapPixelEdgeWidth);
                 texNormal.xy *= step(kHeightMapFlattenEpsilon, abs(texNormal.xy));
                 texNormal.z = g_view.recipHeightMapDepth;
-                texNormal = normalize(texNormal);
             }
             else
             {
@@ -539,10 +535,15 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
                 axisSampleIndices = int2(clamp(float2(axisBevelCentreSampleCoord - g_view.heightMapPixelEdgeWidth, axisBevelCentreSampleCoord + g_view.heightMapPixelEdgeWidth) * 2.f, 0.0, 1.0));
                 texNormal.y = (axisSamplePair[axisSampleIndices.x] - axisSamplePair[axisSampleIndices.y]);
                 texNormal.z = g_view.recipHeightMapDepth;
-                texNormal = normalize(texNormal);
             }
+            
             // TODO: in the future make normal computations relative to vertex normal (doesn't make sense to do it now since entities have no PBR textures and blocks have no vertex normals).
-            surfaceInfo.normal = mul(texNormal, float3x3(tangent, bitangent, geometryInfo.geometryNormal));
+            float3x3 TBN = float3x3(
+                geometryInfo.modelSpaceGeometryTangent,
+                geometryInfo.modelSpaceGeometryBitangent,
+                geometryInfo.modelSpaceGeometryNormal
+            );
+            surfaceInfo.normal = normalize(mul(mul(texNormal, TBN), (float3x3)objectInstance.modelToWorld));
         }
     }
 
