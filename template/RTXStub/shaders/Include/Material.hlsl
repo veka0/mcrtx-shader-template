@@ -498,12 +498,12 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
                     // Consider this a traditional heightmap when all 3 rgb channels are equal and
                     // when alpha is either 0, 1 or equal to red.
                     isPackedHeightmap = (
+                        pixelEgdeNormals.r != pixelEgdeNormals.g ||
+                        pixelEgdeNormals.g != pixelEgdeNormals.b ||
                         (
                             pixelEgdeNormals.a != pixelEgdeNormals.r && 
                             abs(pixelEgdeNormals.a - 0.5) < (0.5 - 0.5/255.0) // Equivalent to: pixelEgdeNormals.a != 0 && pixelEgdeNormals.a != 1
-                        ) || 
-                        pixelEgdeNormals.r != pixelEgdeNormals.g ||
-                        pixelEgdeNormals.g != pixelEgdeNormals.b
+                        )
                     );
                     #endif
                 }
