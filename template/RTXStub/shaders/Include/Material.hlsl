@@ -375,8 +375,9 @@ SurfaceInfo MaterialVanilla(HitInfo hitInfo, GeometryInfo geometryInfo, ObjectIn
     }
     
     // For some reason terrain is not treated as having 0.5 threshold so we have to also explicitly test for it, hence the `kObjectInstanceFlagChunk` part in below code.
+    // Filled maps in first person or in item frames should also be treated as having 0.5 treshold, so we check for them here, with `!objectInstance.flags`.
     surfaceInfo.shouldDiscard = hitInfo.materialType == MATERIAL_TYPE_ALPHA_TEST 
-        && (objectInstance.flags & (kObjectInstanceFlagAlphaTestThresholdHalf | kObjectInstanceFlagChunk) ? color.a < 0.5 : color.a == 0.0);
+        && (objectInstance.flags & (kObjectInstanceFlagAlphaTestThresholdHalf | kObjectInstanceFlagChunk) || !objectInstance.flags ? color.a < 0.5 : color.a == 0.0);
 
     if (objectInstance.flags & kObjectInstanceFlagHasSeasonsTexture)
     {
